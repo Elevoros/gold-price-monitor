@@ -1,28 +1,34 @@
+# Import the necessary libraries for web scraping and API calls
 import requests
 from bs4 import BeautifulSoup
 import re
 import datetime
 
-# The base URL for the Bank of Greece gold prices page
-BOG_BASE_URL = 'https://www.bankofgreece.gr'
-BOG_PRICES_PAGE = f'{BOG_BASE_URL}/kiries-leitourgies/agores/xrysos/deltia-timwn-xrysoy/timh-xryshs-liras'
-
-# Telegram Bot configuration
+# --- Telegram Bot configuration ---
 # REPLACE WITH YOUR OWN VALUES
+# The token for your Telegram bot, obtained from BotFather
 TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
+# The chat ID of the user or group to receive the message
 TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+
+# --- Bank of Greece Web Scraping Configuration ---
+# The base URL for the Bank of Greece website
+BOG_BASE_URL = 'https://www.bankofgreece.gr'
+# The specific page for the gold price bulletins
+BOG_PRICES_PAGE = f'{BOG_BASE_URL}/kiries-leitourgies/agores/xrysos/deltia-timwn-xrysoy/timh-xryshs-liras'
 
 def get_latest_bulletin_url():
     """
-    Finds and returns the URL for the latest gold price bulletin.
+    Βρίσκει και επιστρέφει το URL για το πιο πρόσφατο δελτίο τιμών χρυσού.
     """
     try:
-        # Fetch the main gold prices page
+        # Ανακτά το περιεχόμενο της κύριας σελίδας τιμών
         response = requests.get(BOG_PRICES_PAGE)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Find the link to the latest bulletin. The link typically has the 'bulletin' parameter.
+        # Βρίσκει τον σύνδεσμο για το πιο πρόσφατο δελτίο.
+        # Ο σύνδεσμος έχει συνήθως την παράμετρο '?bulletin=' στο URL.
         latest_link = soup.find('a', href=re.compile(r'\?bulletin='))
 
         if latest_link and 'href' in latest_link.attrs:
@@ -36,30 +42,28 @@ def get_latest_bulletin_url():
 
 def scrape_prices(url):
     """
-    Scrapes the buy and sell prices from a specific bulletin URL.
+    Ανακτά τις τιμές αγοράς και πώλησης από ένα συγκεκριμένο URL δελτίου.
     """
     try:
         response = requests.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Find the table containing the prices.
-        # The table is inside a div with class 'list_container'.
-        # This CSS selector may need updating if the site's design changes.
+        # Βρίσκει τον πίνακα που περιέχει τις τιμές.
+        # Ο πίνακας βρίσκεται μέσα σε ένα div με κλάση 'list_container'.
         prices_table = soup.find('div', class_='list_container').find('table')
 
         if not prices_table:
             print("Σφάλμα: Δεν βρέθηκε ο πίνακας τιμών.")
             return None
 
-        # Find the row for the 'ΛΙΡΑ ΑΓΓΛΙΑΣ' (English Sovereign)
+        # Βρίσκει τη γραμμή για τη 'ΛΙΡΑ ΑΓΓΛΙΑΣ'
         rows = prices_table.find_all('tr')
         for row in rows:
-            # Look for the text 'ΛΙΡΑ ΑΓΓΛΙΑΣ' in the row
             if 'ΛΙΡΑ ΑΓΓΛΙΑΣ' in row.get_text():
                 cells = row.find_all('td')
                 if len(cells) >= 3:
-                    # Clean the price strings (remove spaces, commas, etc.)
+                    # Καθαρίζει τις τιμές από κενά, κόμματα, κλπ.
                     buy_price_text = cells[1].get_text(strip=True).replace(',', '.')
                     sell_price_text = cells[2].get_text(strip=True).replace(',', '.')
                     
@@ -80,7 +84,7 @@ def scrape_prices(url):
 
 def send_telegram_message(message):
     """
-    Sends a message to a Telegram bot.
+    Στέλνει ένα μήνυμα σε ένα bot του Telegram.
     """
     if TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN" or TELEGRAM_CHAT_ID == "YOUR_CHAT_ID":
         print("Σφάλμα: Δεν έχει ρυθμιστεί το Bot Token ή το Chat ID του Telegram.")
@@ -102,13 +106,13 @@ def send_telegram_message(message):
         print(f"Σφάλμα κατά την αποστολή του μηνύματος στο Telegram: {e}")
 
 if __name__ == '__main__':
-    # Step 1: Get the URL of the latest bulletin
+    # Βήμα 1: Βρίσκει το URL του πιο πρόσφατου δελτίου
     latest_url = get_latest_bulletin_url()
     
     if latest_url:
         print(f"Βρέθηκε το πιο πρόσφατο δελτίο: {latest_url}")
         
-        # Step 2: Scrape the prices from the latest bulletin
+        # Βήμα 2: Ανακτά τις τιμές από το πιο πρόσφατο δελτίο
         prices = scrape_prices(latest_url)
 
         if prices:
@@ -116,7 +120,7 @@ if __name__ == '__main__':
             print(f"Αγορά: {prices['buy']} €")
             print(f"Πώληση: {prices['sell']} €")
 
-            # Step 3: Prepare and send the message to Telegram
+            # Βήμα 3: Προετοιμάζει και στέλνει το μήνυμα στο Telegram
             message_text = (
                 f"*Ενημέρωση Τιμών Χρυσής Λίρας - {datetime.date.today().strftime('%d/%m/%Y')}*\n"
                 f"--------------------------------------------------\n"
