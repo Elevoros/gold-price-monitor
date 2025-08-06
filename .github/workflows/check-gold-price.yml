@@ -1,31 +1,35 @@
-name: Check Gold Price
+# .github/workflows/main.yml
+# This workflow runs the Python script daily to send a Telegram notification.
+
+name: Gold Price Telegram Notifier
 
 on:
   schedule:
-    # Τρέχει κάθε μέρα στις 10:00 π.μ. (UTC)
-    - cron: '0 10 * * *'
-  workflow_dispatch:
+    # Runs at 12:30 PM (EEST) every day.
+    # The cron expression is in UTC, so we subtract 3 hours from 15:30 UTC.
+    # We choose this time because the prices are usually published after midday.
+    - cron: '30 9 * * *'
 
 jobs:
-  check-price:
+  run-script:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12' # or your preferred Python version
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install selenium pushover-complete webdriver-manager
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4
 
-      - name: Run the script
-        env:
-          PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
-          PUSHOVER_API_TOKEN: ${{ secrets.PUSHOVER_API_TOKEN }}
-        run: python gold_price_monitor.py
+    - name: Run the Python script
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: python gold_price_monitor.py
