@@ -16,12 +16,19 @@ BOG_BASE_URL = 'https://www.bankofgreece.gr'
 # The specific page for the gold price bulletins
 BOG_PRICES_PAGE = f'{BOG_BASE_URL}/kiries-leitourgies/agores/xrysos/deltia-timwn-xrysoy/timh-xryshs-liras'
 
+# Headers to make the request appear as if it's coming from a browser
+# This helps to avoid 403 Forbidden errors.
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
+
 def get_latest_bulletin_url():
     """
     Βρίσκει και επιστρέφει το URL για το πιο πρόσφατο δελτίο τιμών χρυσού.
     """
     try:
-        response = requests.get(BOG_PRICES_PAGE)
+        # Pass the headers with the request
+        response = requests.get(BOG_PRICES_PAGE, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         latest_link = soup.find('a', href=re.compile(r'\?bulletin='))
@@ -40,7 +47,8 @@ def scrape_prices(url):
     Ανακτά τις τιμές αγοράς και πώλησης από ένα συγκεκριμένο URL δελτίου.
     """
     try:
-        response = requests.get(url)
+        # Pass the headers with the request
+        response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -77,7 +85,6 @@ def send_telegram_message(message):
     """
     Στέλνει ένα μήνυμα σε ένα bot του Telegram.
     """
-    # Check if the environment variables are set
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Σφάλμα: Δεν έχουν ρυθμιστεί το Bot Token ή το Chat ID του Telegram ως μεταβλητές περιβάλλοντος.")
         return
@@ -98,13 +105,11 @@ def send_telegram_message(message):
         print(f"Σφάλμα κατά την αποστολή του μηνύματος στο Telegram: {e}")
 
 if __name__ == '__main__':
-    # Βήμα 1: Βρίσκει το URL του πιο πρόσφατου δελτίου
     latest_url = get_latest_bulletin_url()
     
     if latest_url:
         print(f"Βρέθηκε το πιο πρόσφατο δελτίο: {latest_url}")
         
-        # Βήμα 2: Ανακτά τις τιμές από το πιο πρόσφατο δελτίο
         prices = scrape_prices(latest_url)
 
         if prices:
@@ -112,7 +117,6 @@ if __name__ == '__main__':
             print(f"Αγορά: {prices['buy']} €")
             print(f"Πώληση: {prices['sell']} €")
 
-            # Βήμα 3: Προετοιμάζει και στέλνει το μήνυμα στο Telegram
             message_text = (
                 f"*Ενημέρωση Τιμών Χρυσής Λίρας - {datetime.date.today().strftime('%d/%m/%Y')}*\n"
                 f"--------------------------------------------------\n"
