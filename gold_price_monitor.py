@@ -3,13 +3,12 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import datetime
+import os
 
 # --- Telegram Bot configuration ---
-# REPLACE WITH YOUR OWN VALUES
-# The token for your Telegram bot, obtained from BotFather
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
-# The chat ID of the user or group to receive the message
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+# We now get the bot token and chat ID from environment variables
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # --- Bank of Greece Web Scraping Configuration ---
 # The base URL for the Bank of Greece website
@@ -22,13 +21,9 @@ def get_latest_bulletin_url():
     Βρίσκει και επιστρέφει το URL για το πιο πρόσφατο δελτίο τιμών χρυσού.
     """
     try:
-        # Ανακτά το περιεχόμενο της κύριας σελίδας τιμών
         response = requests.get(BOG_PRICES_PAGE)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Βρίσκει τον σύνδεσμο για το πιο πρόσφατο δελτίο.
-        # Ο σύνδεσμος έχει συνήθως την παράμετρο '?bulletin=' στο URL.
         latest_link = soup.find('a', href=re.compile(r'\?bulletin='))
 
         if latest_link and 'href' in latest_link.attrs:
@@ -49,21 +44,17 @@ def scrape_prices(url):
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Βρίσκει τον πίνακα που περιέχει τις τιμές.
-        # Ο πίνακας βρίσκεται μέσα σε ένα div με κλάση 'list_container'.
         prices_table = soup.find('div', class_='list_container').find('table')
 
         if not prices_table:
             print("Σφάλμα: Δεν βρέθηκε ο πίνακας τιμών.")
             return None
 
-        # Βρίσκει τη γραμμή για τη 'ΛΙΡΑ ΑΓΓΛΙΑΣ'
         rows = prices_table.find_all('tr')
         for row in rows:
             if 'ΛΙΡΑ ΑΓΓΛΙΑΣ' in row.get_text():
                 cells = row.find_all('td')
                 if len(cells) >= 3:
-                    # Καθαρίζει τις τιμές από κενά, κόμματα, κλπ.
                     buy_price_text = cells[1].get_text(strip=True).replace(',', '.')
                     sell_price_text = cells[2].get_text(strip=True).replace(',', '.')
                     
@@ -86,8 +77,9 @@ def send_telegram_message(message):
     """
     Στέλνει ένα μήνυμα σε ένα bot του Telegram.
     """
-    if TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN" or TELEGRAM_CHAT_ID == "YOUR_CHAT_ID":
-        print("Σφάλμα: Δεν έχει ρυθμιστεί το Bot Token ή το Chat ID του Telegram.")
+    # Check if the environment variables are set
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Σφάλμα: Δεν έχουν ρυθμιστεί το Bot Token ή το Chat ID του Telegram ως μεταβλητές περιβάλλοντος.")
         return
 
     telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -130,4 +122,3 @@ if __name__ == '__main__':
             )
             
             send_telegram_message(message_text)
-
