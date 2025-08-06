@@ -29,7 +29,7 @@ def get_current_price():
         
         driver.get(URL)
         time.sleep(5)
-        price_element = driver.find_element(By.XPATH, '//*[@id="productPage"]/div[2]/div/div[2]/div[1]/div[1]/span/span[2]')
+        price_element = driver.find_element(By.XPATH, '//*[@id="productPage"]/div[5]/div/div/div[1]/div[2]/div[3]/div[3]/div/div[3]/p/span')
         price_text = price_element.text
         current_price = float(price_text.replace('£', '').replace(',', ''))
         print(f"Τρέχουσα τιμή: {current_price} GBP")
