@@ -17,9 +17,11 @@ BOG_BASE_URL = 'https://www.bankofgreece.gr'
 BOG_PRICES_PAGE = f'{BOG_BASE_URL}/kiries-leitourgies/agores/xrysos/deltia-timwn-xrysoy/timh-xryshs-liras'
 
 # Headers to make the request appear as if it's coming from a browser
-# This helps to avoid 403 Forbidden errors.
+# This helps to avoid 403 Forbidden errors and cache issues.
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
 }
 
 def get_latest_bulletin_url():
@@ -115,7 +117,7 @@ if __name__ == '__main__':
         if prices:
             print("\nΤιμές Χρυσής Λίρας Αγγλίας:")
             print(f"Αγορά: {prices['buy']} €")
-            print(f"Πώληση: {prices['sell']} €")
+            f"Πώληση: {prices['sell']} €"
 
             message_text = (
                 f"*Ενημέρωση Τιμών Χρυσής Λίρας - {datetime.date.today().strftime('%d/%m/%Y')}*\n"
