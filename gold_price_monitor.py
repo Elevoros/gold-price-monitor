@@ -2,9 +2,10 @@ import time
 import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
-from pushover_complete import PushoverAPI # Αλλαγή εδώ
+from webdriver_manager.chrome import ChromeDriverManager
+from pushover_complete import PushoverAPI
 
 # Ρυθμίσεις Pushover - Τα κλειδιά λαμβάνονται από τα GitHub Secrets
 PUSHOVER_USER_KEY = os.getenv('PUSHOVER_USER_KEY')
@@ -16,12 +17,16 @@ URL = 'https://www.bullionbypost.co.uk/gold-coins/full-sovereign-gold-coin/bulli
 def get_current_price():
     """Παίρνει την τρέχουσα τιμή της χρυσής λίρας από την ιστοσελίδα."""
     try:
+        # Ρυθμίσεις για να τρέχει το Chrome στο παρασκήνιο (headless)
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        service = Service('/usr/bin/chromedriver')
+        
+        # Χρήση του webdriver-manager για να κατεβάσει αυτόματα τον driver
+        service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
+        
         driver.get(URL)
         time.sleep(5)
         price_element = driver.find_element(By.XPATH, '//*[@id="productPage"]/div[2]/div/div[2]/div[1]/div[1]/span/span[2]')
@@ -39,8 +44,8 @@ def get_current_price():
 def send_notification(message):
     """Στέλνει ειδοποίηση στο κινητό μέσω του Pushover."""
     try:
-        pushover_api = PushoverAPI(PUSHOVER_API_TOKEN) # Αλλαγή εδώ
-        pushover_api.send_message(PUSHOVER_USER_KEY, message, title="Ειδοποίηση Τιμής Χρυσής Λίρας") # Αλλαγή εδώ
+        pushover_api = PushoverAPI(PUSHOVER_API_TOKEN)
+        pushover_api.send_message(PUSHOVER_USER_KEY, message, title="Ειδοποίηση Τιμής Χρυσής Λίρας")
         print("Ειδοποίηση στάλθηκε επιτυχώς!")
     except Exception as e:
         print(f"Σφάλμα κατά την αποστολή ειδοποίησης: {e}")
