@@ -4,11 +4,14 @@
 name: Gold Price Telegram Notifier
 
 on:
+  # This trigger runs the workflow daily at a scheduled time
   schedule:
     # Runs at 12:30 PM (EEST) every day.
     # The cron expression is in UTC, so we subtract 3 hours from 15:30 UTC.
     # We choose this time because the prices are usually published after midday.
     - cron: '30 9 * * *'
+  # This trigger allows for manual execution from the GitHub Actions UI
+  workflow_dispatch:
 
 jobs:
   run-script:
