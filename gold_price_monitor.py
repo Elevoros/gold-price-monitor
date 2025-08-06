@@ -1,60 +1,129 @@
-import time
-import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from pushover_complete import PushoverAPI
+import requests
+from bs4 import BeautifulSoup
+import re
+import datetime
 
-# Ρυθμίσεις Pushover - Τα κλειδιά λαμβάνονται από τα GitHub Secrets
-PUSHOVER_USER_KEY = os.getenv('PUSHOVER_USER_KEY')
-PUSHOVER_API_TOKEN = os.getenv('PUSHOVER_API_TOKEN')
+# The base URL for the Bank of Greece gold prices page
+BOG_BASE_URL = 'https://www.bankofgreece.gr'
+BOG_PRICES_PAGE = f'{BOG_BASE_URL}/kiries-leitourgies/agores/xrysos/deltia-timwn-xrysoy/timh-xryshs-liras'
 
-# URL της ιστοσελίδας (παράδειγμα: BullionByPost)
-URL = 'https://www.bullionbypost.co.uk/gold-coins/full-sovereign-gold-coin/bullion-gold-sovereign/'
+# Telegram Bot configuration
+# REPLACE WITH YOUR OWN VALUES
+TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
 
-def get_current_price():
-    """Παίρνει την τρέχουσα τιμή της χρυσής λίρας από την ιστοσελίδα."""
+def get_latest_bulletin_url():
+    """
+    Finds and returns the URL for the latest gold price bulletin.
+    """
     try:
-        # Ρυθμίσεις για να τρέχει το Chrome στο παρασκήνιο (headless)
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        
-        # Χρήση του webdriver-manager για να κατεβάσει αυτόματα τον driver
-        service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        driver.get(URL)
-        time.sleep(5)
-        price_element = driver.find_element(By.XPATH, '//*[@id="productPage"]/div[5]/div/div/div[1]/div[2]/div[3]/div[3]/div/div[3]/p/span')
-        price_text = price_element.text
-        current_price = float(price_text.replace('£', '').replace(',', ''))
-        print(f"Τρέχουσα τιμή: {current_price} GBP")
-        return current_price
-    except Exception as e:
-        print(f"Σφάλμα κατά τη λήψη της τιμής: {e}")
+        # Fetch the main gold prices page
+        response = requests.get(BOG_PRICES_PAGE)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Find the link to the latest bulletin. The link typically has the 'bulletin' parameter.
+        latest_link = soup.find('a', href=re.compile(r'\?bulletin='))
+
+        if latest_link and 'href' in latest_link.attrs:
+            return f"{BOG_BASE_URL}{latest_link['href']}"
+        else:
+            print("Σφάλμα: Δεν βρέθηκε ο σύνδεσμος για το πιο πρόσφατο δελτίο τιμών.")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Σφάλμα κατά την ανάκτηση της κύριας σελίδας: {e}")
         return None
-    finally:
-        if 'driver' in locals():
-            driver.quit()
 
-def send_notification(message):
-    """Στέλνει ειδοποίηση στο κινητό μέσω του Pushover."""
+def scrape_prices(url):
+    """
+    Scrapes the buy and sell prices from a specific bulletin URL.
+    """
     try:
-        pushover_api = PushoverAPI(PUSHOVER_API_TOKEN)
-        pushover_api.send_message(PUSHOVER_USER_KEY, message, title="Ειδοποίηση Τιμής Χρυσής Λίρας")
-        print("Ειδοποίηση στάλθηκε επιτυχώς!")
-    except Exception as e:
-        print(f"Σφάλμα κατά την αποστολή ειδοποίησης: {e}")
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
 
-if __name__ == "__main__":
-    print("Το bot ξεκίνησε. Ελέγχει την τιμή της χρυσής λίρας.")
-    current_price = get_current_price()
-    if current_price is not None:
-        message = f"Τρέχουσα τιμή χρυσής λίρας: £{current_price}"
-        send_notification(message)
-    else:
-        send_notification("Σφάλμα: Δεν είναι δυνατή η λήψη της τιμής της χρυσής λίρας.")
+        # Find the table containing the prices.
+        # The table is inside a div with class 'list_container'.
+        # This CSS selector may need updating if the site's design changes.
+        prices_table = soup.find('div', class_='list_container').find('table')
+
+        if not prices_table:
+            print("Σφάλμα: Δεν βρέθηκε ο πίνακας τιμών.")
+            return None
+
+        # Find the row for the 'ΛΙΡΑ ΑΓΓΛΙΑΣ' (English Sovereign)
+        rows = prices_table.find_all('tr')
+        for row in rows:
+            # Look for the text 'ΛΙΡΑ ΑΓΓΛΙΑΣ' in the row
+            if 'ΛΙΡΑ ΑΓΓΛΙΑΣ' in row.get_text():
+                cells = row.find_all('td')
+                if len(cells) >= 3:
+                    # Clean the price strings (remove spaces, commas, etc.)
+                    buy_price_text = cells[1].get_text(strip=True).replace(',', '.')
+                    sell_price_text = cells[2].get_text(strip=True).replace(',', '.')
+                    
+                    buy_price = float(buy_price_text)
+                    sell_price = float(sell_price_text)
+                    
+                    return {'buy': buy_price, 'sell': sell_price}
+
+        print("Σφάλμα: Δεν βρέθηκαν οι τιμές για τη Λίρα Αγγλίας.")
+        return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"Σφάλμα κατά την ανάκτηση του δελτίου τιμών: {e}")
+        return None
+    except (ValueError, IndexError) as e:
+        print(f"Σφάλμα κατά την επεξεργασία των τιμών: {e}")
+        return None
+
+def send_telegram_message(message):
+    """
+    Sends a message to a Telegram bot.
+    """
+    if TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN" or TELEGRAM_CHAT_ID == "YOUR_CHAT_ID":
+        print("Σφάλμα: Δεν έχει ρυθμιστεί το Bot Token ή το Chat ID του Telegram.")
+        return
+
+    telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
+
+    try:
+        response = requests.post(telegram_api_url, json=payload, timeout=5)
+        response.raise_for_status()
+        print("Το μήνυμα στάλθηκε με επιτυχία στο Telegram.")
+    except requests.exceptions.RequestException as e:
+        print(f"Σφάλμα κατά την αποστολή του μηνύματος στο Telegram: {e}")
+
+if __name__ == '__main__':
+    # Step 1: Get the URL of the latest bulletin
+    latest_url = get_latest_bulletin_url()
+    
+    if latest_url:
+        print(f"Βρέθηκε το πιο πρόσφατο δελτίο: {latest_url}")
+        
+        # Step 2: Scrape the prices from the latest bulletin
+        prices = scrape_prices(latest_url)
+
+        if prices:
+            print("\nΤιμές Χρυσής Λίρας Αγγλίας:")
+            print(f"Αγορά: {prices['buy']} €")
+            print(f"Πώληση: {prices['sell']} €")
+
+            # Step 3: Prepare and send the message to Telegram
+            message_text = (
+                f"*Ενημέρωση Τιμών Χρυσής Λίρας - {datetime.date.today().strftime('%d/%m/%Y')}*\n"
+                f"--------------------------------------------------\n"
+                f"**Τιμή Αγοράς (ΤτΕ):** {prices['buy']} €\n"
+                f"**Τιμή Πώλησης (ΤτΕ):** {prices['sell']} €\n"
+                f"\nΑυτές είναι οι επίσημες τιμές της Τράπεζας της Ελλάδος."
+            )
+            
+            send_telegram_message(message_text)
+
