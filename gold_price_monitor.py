@@ -25,24 +25,26 @@ HEADERS = {
 }
 
 def get_latest_bulletin_url():
-    """
-    Βρίσκει και επιστρέφει το URL για το πιο πρόσφατο δελτίο τιμών χρυσού.
-    """
     try:
-        # Pass the headers with the request
         response = requests.get(BOG_PRICES_PAGE, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Αντικατέστησε με το σωστό pattern εφόσον χρειαστεί
         latest_link = soup.find('a', href=re.compile(r'\?bulletin='))
 
-        if latest_link and 'href' in latest_link.attrs:
-            return f"{BOG_BASE_URL}{latest_link['href']}"
+        if latest_link and latest_link.get('href'):
+            href = latest_link['href']
+            full_url = href if href.startswith('http') else f"{BOG_BASE_URL}{href}"
+            return full_url
         else:
-            print("Σφάλμα: Δεν βρέθηκε ο σύνδεσμος για το πιο πρόσφατο δελτίο τιμών.")
+            print("Σφάλμα: Δεν βρέθηκε σύνδεσμος με παράμετρο bulletin.")
             return None
+
     except requests.exceptions.RequestException as e:
         print(f"Σφάλμα κατά την ανάκτηση της κύριας σελίδας: {e}")
         return None
+
 
 def scrape_prices(url):
     """
