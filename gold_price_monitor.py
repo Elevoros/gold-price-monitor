@@ -6,9 +6,10 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-import datetime
+from dotenv import load_dotenv
 
-# Telegram config (ή Pushover όποτε θες)
+load_dotenv()  # φόρτωση από .env
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -26,23 +27,24 @@ def send_telegram_message(msg):
 
 def scrape_gold_price_selenium():
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")  # για νέα headless λειτουργία
     options.add_argument("--no-sandbox")
-    options.add_argument(f"--user-data-dir=/tmp/selenium_profile_{int(time.time())}")
-
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115 Safari/537.36")
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
     try:
         driver.get("https://www.bankofgreece.gr/en/main-tasks/markets/gold/gold-price-bulletin")
-        time.sleep(3)
+        time.sleep(4)
         soup = BeautifulSoup(driver.page_source, 'html.parser')
     finally:
         driver.quit()
 
-    # Βρες την ημερομηνία και τις τιμές στη σελίδα
+    # Βρες την ημερομηνία δελτίου
     header = soup.find('h1') or soup.find('h2')
-    date_text = header.get_text(strip=True) if header else ''
-    print(f"Ανάλυση δελτίου: {date_text}")
+    date_text = header.get_text(strip=True) if header else 'Άγνωστη ημερομηνία'
 
+    # Πίνακας τιμών
     rows = soup.select("table tr")
     price_info = {}
     for row in rows:
@@ -54,7 +56,7 @@ def scrape_gold_price_selenium():
                 price_info['sell'] = cols[2].replace(',', '.')
                 break
 
-    return date_text, price_info or None
+    return date_text, price_info if price_info else None
 
 if __name__ == "__main__":
     date_text, info = scrape_gold_price_selenium()
@@ -64,6 +66,6 @@ if __name__ == "__main__":
             f"{info['item']}\nΑγορά: {info['buy']} €\nΠώληση: {info['sell']} €"
         )
     else:
-        msg = "⚠️ Δελτίο τιμών βρέθηκε αλλά η 'Λίρα Αγγλίας' δεν βρέθηκε στο πίνακα."
+        msg = "⚠️ Δελτίο τιμών βρέθηκε αλλά η 'Λίρα Αγγλίας' δεν βρέθηκε στον πίνακα."
     print(msg)
     send_telegram_message(msg)
