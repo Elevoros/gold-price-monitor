@@ -6,61 +6,64 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+import datetime
 
-# Περιβάλλον μεταβλητές για ασφάλεια
-PUSHOVER_USER_KEY = os.environ.get("PUSHOVER_USER_KEY")
-PUSHOVER_API_TOKEN = os.environ.get("PUSHOVER_API_TOKEN")
+# Telegram config (ή Pushover όποτε θες)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def get_latest_bulletin_url_selenium():
-    print("📡 Ξεκινάει η αναζήτηση του πιο πρόσφατου δελτίου τιμών...")
+def send_telegram_message(msg):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram credentials missing.")
+        return
+    r = requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+        json={'chat_id': TELEGRAM_CHAT_ID, 'text': msg, 'parse_mode': 'Markdown'},
+        timeout=10
+    )
+    r.raise_for_status()
+    print("Telegram message sent.")
 
+def scrape_gold_price_selenium():
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
     options.add_argument(f"--user-data-dir=/tmp/selenium_profile_{int(time.time())}")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
     try:
         driver.get("https://www.bankofgreece.gr/en/main-tasks/markets/gold/gold-price-bulletin")
-        time.sleep(5)
-
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        pdf_links = soup.select("a[href$='.pdf']")
-
-        for link in pdf_links:
-            href = link["href"]
-            text = link.get_text(strip=True).lower()
-            if "gold" in href.lower() or "χρυσ" in text:
-                full_url = "https://www.bankofgreece.gr" + href
-                print(f"✅ Βρέθηκε δελτίο: {full_url}")
-                return full_url
+        time.sleep(3)
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
     finally:
         driver.quit()
 
-    print("❌ Δεν βρέθηκε δελτίο τιμών.")
-    return None
+    # Βρες την ημερομηνία και τις τιμές στη σελίδα
+    header = soup.find('h1') or soup.find('h2')
+    date_text = header.get_text(strip=True) if header else ''
+    print(f"Ανάλυση δελτίου: {date_text}")
 
-def send_push_notification(message):
-    print("📲 Αποστολή ειδοποίησης...")
-    data = {
-        "token": PUSHOVER_API_TOKEN,
-        "user": PUSHOVER_USER_KEY,
-        "message": message
-    }
-    response = requests.post("https://api.pushover.net/1/messages.json", data=data)
-    if response.status_code == 200:
-        print("✅ Ειδοποίηση εστάλη με επιτυχία.")
-    else:
-        print("❌ Αποτυχία αποστολής:", response.text)
+    rows = soup.select("table tr")
+    price_info = {}
+    for row in rows:
+        cols = [td.get_text(strip=True) for td in row.find_all('td')]
+        if any("sovereign" in c.lower() or "λίρα αγγλίας" in c.lower() for c in cols):
+            if len(cols) >= 3:
+                price_info['item'] = cols[0]
+                price_info['buy'] = cols[1].replace(',', '.')
+                price_info['sell'] = cols[2].replace(',', '.')
+                break
 
-def main():
-    url = get_latest_bulletin_url_selenium()
-    if url:
-        send_push_notification(f"🟡 ΝΕΟ ΔΕΛΤΙΟ ΤΙΜΩΝ ΧΡΥΣΗΣ ΛΙΡΑΣ:\n{url}")
-    else:
-        send_push_notification("⚠️ Δεν βρέθηκε νέο δελτίο τιμών.")
+    return date_text, price_info or None
 
 if __name__ == "__main__":
-    main()
+    date_text, info = scrape_gold_price_selenium()
+    if info:
+        msg = (
+            f"*Δελτίο Τιμών – {date_text}*\n"
+            f"{info['item']}\nΑγορά: {info['buy']} €\nΠώληση: {info['sell']} €"
+        )
+    else:
+        msg = "⚠️ Δελτίο τιμών βρέθηκε αλλά η 'Λίρα Αγγλίας' δεν βρέθηκε στο πίνακα."
+    print(msg)
+    send_telegram_message(msg)
