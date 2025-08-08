@@ -1,55 +1,77 @@
-
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import requests
+import datetime
 import os
+import time
+import re
+import requests
 
-def get_html_with_selenium(url):
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.get(url)
-    html = driver.page_source
-    driver.quit()
-    return html
+# Telegram config
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def send_telegram_message(message):
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
-        print("Telegram credentials not found.")
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram token ή chat ID δεν έχουν ρυθμιστεί.")
         return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {'chat_id': TELEGRAM_CHAT_ID, 'text': message, 'parse_mode': 'Markdown'}
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        print("Μήνυμα στο Telegram στάλθηκε με επιτυχία.")
+    except Exception as e:
+        print(f"Σφάλμα στην αποστολή Telegram: {e}")
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message}
-    requests.post(url, data=payload)
+def get_latest_bulletin_url_selenium():
+    options = Options()
+    # Αφαίρεσε το headless για να φαίνεται το παράθυρο
+    # options.add_argument("--headless")
 
-def scrape_prices():
-    BOG_PRICES_PAGE = 'https://www.bankofgreece.gr/en/main-tasks/markets/gold/gold-price-bulletin'
-    html = get_html_with_selenium(BOG_PRICES_PAGE)
-    soup = BeautifulSoup(html, 'html.parser')
-    print(soup.prettify()[:1000])  # Εκτυπώνει τα πρώτα 1000 χαρακτήρες για έλεγχο
+    # Βάλε ρεαλιστικό User-Agent
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
+    
+    # Προαιρετικά: options.add_argument("--disable-blink-features=AutomationControlled")
 
-    bulletin_links = soup.find_all('a', href=True)
-    for link in bulletin_links:
-        if 'bulletin' in link['href'] and link['href'].endswith('.pdf'):
-            bulletin_url = 'https://www.bankofgreece.gr' + link['href']
-            return bulletin_url
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.get("https://www.bankofgreece.gr/en/main-tasks/markets/gold/gold-price-bulletin")
 
+    # Άσε τη σελίδα να φορτώσει (5 δευτερόλεπτα)
+    time.sleep(5)
+
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    driver.quit()
+
+    # Ψάξε για links με pattern που δείχνουν σε δελτία τιμών (πχ PDF με ?bulletin=)
+    links = soup.find_all('a', href=True)
+    for link in links:
+        href = link['href']
+        # Παράδειγμα: μπορεί να ψάξουμε pdf με το word 'bulletin' στο URL
+        if re.search(r'bulletin', href, re.IGNORECASE) and href.lower().endswith('.pdf'):
+            full_url = href if href.startswith('http') else "https://www.bankofgreece.gr" + href
+            return full_url
+
+    print("Δεν βρέθηκε σύνδεσμος δελτίου τιμών.")
     return None
 
-def main():
-    bulletin_url = scrape_prices()
-    if bulletin_url:
-        message = f"Τελευταίο δελτίο τιμών χρυσής λίρας: {bulletin_url}"
-        print(message)
+if __name__ == "__main__":
+    print("Ξεκινάει η αναζήτηση του πιο πρόσφατου δελτίου τιμών...")
+    latest_bulletin_url = get_latest_bulletin_url_selenium()
+
+    if latest_bulletin_url:
+        print(f"Πιο πρόσφατο δελτίο: {latest_bulletin_url}")
+
+        message = (
+            f"*Ενημέρωση Τιμών Χρυσής Λίρας - {datetime.date.today().strftime('%d/%m/%Y')}*\n"
+            f"Το πιο πρόσφατο δελτίο τιμών είναι διαθέσιμο εδώ:\n"
+            f"{latest_bulletin_url}\n"
+            f"\n(Αυτές είναι οι επίσημες τιμές από την Τράπεζα της Ελλάδος.)"
+        )
+
         send_telegram_message(message)
     else:
         print("Δεν βρέθηκε δελτίο τιμών.")
-
-if __name__ == "__main__":
-    main()
