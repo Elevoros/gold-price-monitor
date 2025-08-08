@@ -112,16 +112,16 @@ def send_telegram_message(message):
 
 if __name__ == '__main__':
     latest_url = get_latest_bulletin_url()
-    
+
     if latest_url:
         print(f"Βρέθηκε το πιο πρόσφατο δελτίο: {latest_url}")
-        
+
         prices = scrape_prices(latest_url)
 
         if prices:
             print("\nΤιμές Χρυσής Λίρας Αγγλίας:")
             print(f"Αγορά: {prices['buy']} €")
-            f"Πώληση: {prices['sell']} €"
+            print(f"Πώληση: {prices['sell']} €")
 
             message_text = (
                 f"*Ενημέρωση Τιμών Χρυσής Λίρας - {datetime.date.today().strftime('%d/%m/%Y')}*\n"
@@ -130,5 +130,6 @@ if __name__ == '__main__':
                 f"**Τιμή Πώλησης (ΤτΕ):** {prices['sell']} €\n"
                 f"\nΑυτές είναι οι επίσημες τιμές της Τράπεζας της Ελλάδος."
             )
-            
+
             send_telegram_message(message_text)
+
