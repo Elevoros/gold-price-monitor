@@ -49,13 +49,16 @@ def scrape_prices(url):
     Ανακτά τις τιμές αγοράς και πώλησης από ένα συγκεκριμένο URL δελτίου.
     """
     try:
-        # Pass the headers with the request
         response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        prices_table = soup.find('div', class_='list_container').find('table')
+        container = soup.find('div', class_='list_container')
+        if not container:
+            print("Σφάλμα: Δεν βρέθηκε το container με την τιμή.")
+            return None
 
+        prices_table = container.find('table')
         if not prices_table:
             print("Σφάλμα: Δεν βρέθηκε ο πίνακας τιμών.")
             return None
@@ -67,10 +70,10 @@ def scrape_prices(url):
                 if len(cells) >= 3:
                     buy_price_text = cells[1].get_text(strip=True).replace(',', '.')
                     sell_price_text = cells[2].get_text(strip=True).replace(',', '.')
-                    
+
                     buy_price = float(buy_price_text)
                     sell_price = float(sell_price_text)
-                    
+
                     return {'buy': buy_price, 'sell': sell_price}
 
         print("Σφάλμα: Δεν βρέθηκαν οι τιμές για τη Λίρα Αγγλίας.")
@@ -79,9 +82,10 @@ def scrape_prices(url):
     except requests.exceptions.RequestException as e:
         print(f"Σφάλμα κατά την ανάκτηση του δελτίου τιμών: {e}")
         return None
-    except (ValueError, IndexError) as e:
+    except (ValueError, IndexError, AttributeError) as e:
         print(f"Σφάλμα κατά την επεξεργασία των τιμών: {e}")
         return None
+
 
 def send_telegram_message(message):
     """
