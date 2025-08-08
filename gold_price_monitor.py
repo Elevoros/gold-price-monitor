@@ -14,7 +14,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 # The base URL for the Bank of Greece website
 BOG_BASE_URL = 'https://www.bankofgreece.gr'
 # The specific page for the gold price bulletins
-BOG_PRICES_PAGE = f'{BOG_BASE_URL}/kiries-leitourgies/agores/xrysos/deltia-timwn-xrysoy/timh-xryshs-liras'
+BOG_PRICES_PAGE = 'https://www.bankofgreece.gr/en/main-tasks/markets/gold/gold-price-bulletin'
 
 # Headers to make the request appear as if it's coming from a browser
 # This helps to avoid 403 Forbidden errors and cache issues.
