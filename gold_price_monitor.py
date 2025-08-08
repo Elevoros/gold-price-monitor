@@ -30,6 +30,8 @@ def get_latest_bulletin_url():
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
+        print(soup.prettify()[:1000])
+
         # Αντικατέστησε με το σωστό pattern εφόσον χρειαστεί
         latest_link = soup.find('a', href=re.compile(r'\?bulletin='))
 
