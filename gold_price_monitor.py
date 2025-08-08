@@ -8,6 +8,7 @@ import os
 import time
 import re
 import requests
+import tempfile  # <-- πρόσθετο
 
 # Telegram config
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -35,6 +36,10 @@ def get_latest_bulletin_url_selenium():
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
     
+    # Προσθήκη προσωρινού user-data-dir για αποφυγή conflicts
+    temp_dir = tempfile.mkdtemp()
+    options.add_argument(f"--user-data-dir={temp_dir}")
+
     # Προαιρετικά: options.add_argument("--disable-blink-features=AutomationControlled")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
@@ -46,11 +51,10 @@ def get_latest_bulletin_url_selenium():
     soup = BeautifulSoup(driver.page_source, 'html.parser')
     driver.quit()
 
-    # Ψάξε για links με pattern που δείχνουν σε δελτία τιμών (πχ PDF με ?bulletin=)
+    # Ψάξε για links με pattern που δείχνουν σε δελτία τιμών (πχ PDF με 'bulletin')
     links = soup.find_all('a', href=True)
     for link in links:
         href = link['href']
-        # Παράδειγμα: μπορεί να ψάξουμε pdf με το word 'bulletin' στο URL
         if re.search(r'bulletin', href, re.IGNORECASE) and href.lower().endswith('.pdf'):
             full_url = href if href.startswith('http') else "https://www.bankofgreece.gr" + href
             return full_url
